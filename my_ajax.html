@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Music CRUD Page</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        h1, h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        #music-list { margin-top: 20px; }
+        .music-item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        .music-item button { margin-left: 5px; }
+        #add-form { background: #f4f4f4; padding: 15px; border-radius: 5px; }
+        #add-form div { margin-bottom: 10px; }
+        #add-form label { display: inline-block; width: 80px; }
+        #add-form input { width: 250px; padding: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>bgm list</h1>
+
+    <h2>새 음악 추가</h2>
+    <form id="add-form">
+        <div>
+            <label for="title">제목:</label>
+            <input type="text" id="title" required>
+        </div>
+        <div>
+            <label for="album">앨범:</label>
+            <input type="text" id="album" required>
+        </div>
+        <div>
+            <label for="mood">분위기:</label>
+            <input type="text" id="mood" required>
+        </div>
+        <div>
+            <label for="artist">아티스트:</label>
+            <input type="text" id="artist" required>
+        </div>
+        <button type="submit" id="addButton">추가하기</button>
+    </form>
+
+    <h2>음악 목록</h2>
+    <div id="music-list">
+        <p>로딩 중...</p> 
+    </div>
+
+
+<script>
+
+    let currentEditId = null;
+
+    window.onload = function () {
+        let addMusicForm = document.getElementById("add-form");
+        
+        // 폼 제출 시 handleFormSubmit 함수 하나만 호출하도록 설정
+        addMusicForm.addEventListener("submit", handleFormSubmit);
+        
+        // 페이지가 켜지자마자 목록 자동 로드
+        getMusic();
+    }
+
+    // 폼 제출을 관리하는 메인 함수
+    function handleFormSubmit(event) {
+        event.preventDefault(); // 폼 새로고침 방지
+
+        if (currentEditId === null) {
+            // '추가 모드'일 때
+            createMusicLogic();
+        } else {
+            // '수정 모드'일 때
+            updateMusicLogic(currentEditId);
+        }
+    }
+
+    // (R) Read: 목록 가져오기 (GET)
+    function getMusic(){ 
+        let contents = document.getElementById("music-list");
+        const xhr = new XMLHttpRequest();
+
+        xhr.open("GET", "https://69108baf7686c0e9c20ae745.mockapi.io/musics");
+        xhr.setRequestHeader("content-type", "application/json");
+        xhr.send();
+
+        xhr.onload = () => {
+            if (xhr.status === 200) {
+                const res = JSON.parse(xhr.response);                   
+                contents.innerHTML = makeList(res);
+            } else {
+                console.log(xhr.status, xhr.statusText);
+            }
+        }
+    }
+
+    // (R) Read 일부: 목록 HTML 생성
+    function makeList(data) {
+        let str = "<ul>";
+        data.forEach(item => {
+            str += `
+                <li data-id="${item.id}">
+                    ${item.title} (${item.mood}) from ${item.album}, by ${item.artist}
+                    <button onclick="deleteMusic('${item.id}')">삭제</button>
+                    <button onclick="modifyMusic('${item.id}')">수정</button>
+                </li>
+            `;
+        });
+        str += "</ul>";
+        return str;
+    }
+
+    
+    // (C) Create: 새 음악 추가 로직
+    function createMusicLogic() {
+        let titleInput = document.getElementById("title");
+        let albumInput = document.getElementById("album");
+        let moodInput = document.getElementById("mood");
+        let artistInput = document.getElementById("artist");
+
+        let titleValue = titleInput.value.trim();
+        let albumValue = albumInput.value.trim();
+        let moodValue = moodInput.value.trim();
+        let artistValue = artistInput.value.trim();
+
+        // 빈 칸 검사
+        if (!titleValue || !albumValue || !moodValue || !artistValue) {
+            alert("모든 필드를 채워주세요!");
+            return;
+        }
+
+        const data = { title: titleValue, album: albumValue, mood: moodValue, artist: artistValue };
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "https://69108baf7686c0e9c20ae745.mockapi.io/musics");
+        xhr.setRequestHeader("content-type", "application/json; charset=UTF-8")
+        xhr.send(JSON.stringify(data));
+        
+        xhr.onload = () => {
+            if (xhr.status === 201) {
+                titleInput.value = "";
+                albumInput.value = "";
+                moodInput.value = "";
+                artistInput.value = "";
+                getMusic(); // 목록 새로고침
+            } else {
+                console.log(xhr.status, xhr.statusText);
+            }
+        }
+    }
+
+
+    // (D) Delete: 음악 삭제
+    function deleteMusic(id) {
+        if (!confirm("정말로 ID: " + id + " 음악을 삭제하시겠습니까?")) {
+            return;
+        }
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("DELETE", `https://69108baf7686c0e9c20ae745.mockapi.io/musics/${id}`);
+        xhr.send();
+
+        xhr.onload = () => {
+            if (xhr.status === 200) {
+                console.log("삭제 성공!");
+                getMusic(); // 목록 새로고침
+            } else {
+                console.error("삭제 실패:", xhr.status, xhr.statusText);
+            }
+        }
+    }
+
+
+    // (U) Update - 1단계: '수정' 버튼 클릭 시 폼 채우기
+    function modifyMusic(id) {
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", `https://69108baf7686c0e9c20ae745.mockapi.io/musics/${id}`);
+        xhr.send();
+
+        xhr.onload = () => {
+            if (xhr.status === 200) {
+                const item = JSON.parse(xhr.response);
+
+                // 1. 폼에 기존 데이터 채우기
+                document.getElementById("title").value = item.title;
+                document.getElementById("album").value = item.album;
+                document.getElementById("mood").value = item.mood;
+                document.getElementById("artist").value = item.artist;
+
+                // 2. '수정 모드'로 상태 변경 (ID 저장)
+                currentEditId = item.id;
+
+                // 3. 버튼 텍스트를 '수정하기'로 변경
+                document.getElementById("addButton").innerText = "수정하기";
+                
+                // (편의기능) 폼으로 스크롤
+                document.getElementById("add-form").scrollIntoView({ behavior: 'smooth' });
+
+            } else {
+                console.error("수정할 데이터를 불러오는 데 실패했습니다.", xhr.status, xhr.statusText);
+            }
+        }
+    }
+
+    // (U) Update - 2단계: '수정하기' 버튼 클릭 시
+    function updateMusicLogic(id) {
+        let titleInput = document.getElementById("title");
+        let albumInput = document.getElementById("album");
+        let moodInput = document.getElementById("mood");
+        let artistInput = document.getElementById("artist");
+
+        let titleValue = titleInput.value.trim();
+        let albumValue = albumInput.value.trim();
+        let moodValue = moodInput.value.trim();
+        let artistValue = artistInput.value.trim();
+
+        // 빈 칸 검사
+        if (!titleValue || !albumValue || !moodValue || !artistValue) {
+            alert("모든 필드를 채워주세요!");
+            return;
+        }
+
+        const data = { title: titleValue, album: albumValue, mood: moodValue, artist: artistValue };
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", `https://69108baf7686c0e9c20ae745.mockapi.io/musics/${id}`); // ID를 포함한 주소로 PUT
+        xhr.setRequestHeader("content-type", "application/json; charset=UTF-8");
+        xhr.send(JSON.stringify(data));
+
+        xhr.onload = () => {
+            if (xhr.status === 200) {
+                // 입력 폼 비우기
+                titleInput.value = "";
+                albumInput.value = "";
+                moodInput.value = "";
+                artistInput.value = "";
+
+                // '추가 모드'로 상태 복귀
+                currentEditId = null;
+
+                // 버튼 텍스트를 '추가하기'로 복귀
+                document.getElementById("addButton").innerText = "추가하기";
+
+                getMusic(); // 목록 새로고침
+            } else {
+                console.error("수정 실패:", xhr.status, xhr.statusText);
+            }
+        }
+    }
+
+</script>
+
+</body>
+</html>
